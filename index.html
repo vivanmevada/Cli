@@ -337,7 +337,7 @@ body::after {
       Get one at <a href="https://console.groq.com" target="_blank">console.groq.com</a> → API Keys → Create key
     </div>
     <span class="modal-label">▶ GROQ API KEY</span>
-    <input id="api-key-input" type="password" placeholder="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" />
+    <input id="api-key-input" type="password" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
     <span class="modal-label">▶ SELECT MODEL</span>
     <div class="modal-model-row">
       <div class="model-chip active" data-model="llama-3.3-70b-versatile">llama-3.3-70b</div>
@@ -405,8 +405,8 @@ body::after {
 
 <script>
 // ── STATE ──
-let API_KEY = '';
-let MODEL = 'llama-3.3-70b-versatile';
+let API_KEY = localStorage.getItem('jarvis_key') || '';
+let MODEL = localStorage.getItem('jarvis_model') || 'llama-3.3-70b-versatile';
 let history = [];
 let msgCount = 0;
 let tokenCount = 0;
@@ -453,6 +453,8 @@ function printTyped(text, cls = 'ai', speed = 12) {
 
 // ── MODEL SELECT ──
 document.querySelectorAll('.model-chip').forEach(chip => {
+  if (chip.dataset.model === MODEL) chip.classList.add('active');
+  else chip.classList.remove('active');
   chip.addEventListener('click', () => {
     document.querySelectorAll('.model-chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
@@ -460,15 +462,26 @@ document.querySelectorAll('.model-chip').forEach(chip => {
   });
 });
 
-// ── BOOT ──
-async function bootUp() {
-  const keyInput = document.getElementById('api-key-input').value.trim();
-  if (!keyInput || !keyInput.startsWith('gsk_')) {
-    document.getElementById('api-key-input').style.borderColor = '#ff3a3a';
-    return;
-  }
-  API_KEY = keyInput;
+// Auto-boot if key already saved
+if (API_KEY) {
   document.getElementById('key-modal').style.display = 'none';
+  document.getElementById('api-key-input').value = API_KEY;
+  bootUp(true);
+}
+
+// ── BOOT ──
+async function bootUp(skip = false) {
+  if (!skip) {
+    const keyInput = document.getElementById('api-key-input').value.trim();
+    if (!keyInput || !keyInput.startsWith('gsk_')) {
+      document.getElementById('api-key-input').style.borderColor = '#ff3a3a';
+      return;
+    }
+    API_KEY = keyInput;
+    localStorage.setItem('jarvis_key', API_KEY);
+    localStorage.setItem('jarvis_model', MODEL);
+    document.getElementById('key-modal').style.display = 'none';
+  }
   document.getElementById('model-display').textContent = MODEL.split('-').slice(0,2).join('-').toUpperCase();
   document.getElementById('footer-model').textContent = MODEL.toUpperCase();
   document.getElementById('s-status').textContent = 'ONLINE';
@@ -521,6 +534,7 @@ const cmds = {
     print('  clear      clear terminal', 'info');
     print('  model      show current AI model', 'info');
     print('  reset      clear conversation history', 'info');
+    print('  logout     forget saved API key', 'info');
     print('  [anything] talk to J.A.R.V.I.S', 'info');
     print('────────────────────────────────────────────', 'sep');
     br();
@@ -549,6 +563,13 @@ const cmds = {
     history = [];
     br();
     print('  [SYS] Conversation history wiped, Sir.', 'sys');
+    br();
+  },
+  logout: () => {
+    localStorage.removeItem('jarvis_key');
+    localStorage.removeItem('jarvis_model');
+    br();
+    print('  [SYS] API key cleared. Reload to enter a new key, Sir.', 'warn');
     br();
   },
 };
