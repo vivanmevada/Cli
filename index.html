@@ -169,6 +169,13 @@ html, body {
 .modal-btn:hover {
   background: #002200;
 }
+
+.modal-error {
+  color: var(--red);
+  font-size: 12px;
+  margin-top: 8px;
+  display: none;
+}
 </style>
 </head>
 <body>
@@ -179,10 +186,13 @@ html, body {
     <div class="modal-title">J.A.R.V.I.S TERMINAL SETUP</div>
     <div class="modal-sub">
       OpenRouter API key required (pay-per-use, fully uncensored).<br>
-      Get one at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> → Create key
+      Get one at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> → Create key<br><br>
+      <strong>Tip:</strong> Paste only the key (remove any quotes or extra text). It should start with <span style="color:#0af">sk-or-</span> or <span style="color:#0af">sk-or-v1-</span>.
     </div>
     <span class="modal-label">OPENROUTER API KEY</span>
     <input id="api-key-input" type="password" placeholder="sk-or-..." />
+    <div id="key-error" class="modal-error"></div>
+    
     <span class="modal-label">UNCENSORED MODEL</span>
     <div class="modal-model-row">
       <div class="model-chip active" data-model="gryphe/mythomax-l2-13b">mythomax 13b</div>
@@ -251,14 +261,29 @@ if (API_KEY) {
 
 // ── BOOT ──
 async function bootUp(skip = false) {
+  const errorEl = document.getElementById('key-error');
+  errorEl.style.display = 'none';
+
   if (!skip) {
-    const keyInput = document.getElementById('api-key-input').value.trim();
-    if (!keyInput || !keyInput.startsWith('sk-or-')) {
+    let keyInput = document.getElementById('api-key-input').value;
+    
+    // Clean the key: remove quotes, extra spaces, newlines
+    let cleaned = keyInput.trim()
+      .replace(/^["']|["']$/g, '')   // remove surrounding " or '
+      .replace(/[\n\r]/g, '')        // remove line breaks
+      .trim();
+
+    if (!cleaned || !cleaned.startsWith('sk-or-')) {
+      errorEl.textContent = '❌ Invalid key format. Must start with sk-or- (remove quotes!)';
+      errorEl.style.display = 'block';
       document.getElementById('api-key-input').style.borderColor = '#ff3a3a';
-      setTimeout(() => { document.getElementById('api-key-input').style.borderColor = '#444'; }, 1200);
+      setTimeout(() => {
+        document.getElementById('api-key-input').style.borderColor = '#444';
+      }, 2000);
       return;
     }
-    API_KEY = keyInput;
+
+    API_KEY = cleaned;
     localStorage.setItem('jarvis_key', API_KEY);
     localStorage.setItem('jarvis_model', MODEL);
     document.getElementById('key-modal').style.display = 'none';
@@ -267,6 +292,7 @@ async function bootUp(skip = false) {
   // Simple boot message
   print('J.A.R.V.I.S terminal v4.2 (OpenRouter uncensored)', 'sys');
   print('Connected to model: ' + MODEL, 'sys');
+  print('API key accepted.', 'sys');
   print('All systems nominal.', 'ai');
   br();
   print('Good day, Sir. Ready for command.', 'ai');
@@ -341,7 +367,6 @@ async function handleInput() {
   busy = true;
   input.disabled = true;
 
-  // simple thinking indicator
   const thinkEl = document.createElement('span');
   thinkEl.className = 'line sys';
   thinkEl.textContent = '  [THINKING...]';
@@ -350,16 +375,14 @@ async function handleInput() {
 
   history.push({ role: 'user', content: text });
 
-  const t0 = Date.now();
-
   try {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`,
-        'HTTP-Referer': 'https://localhost/jarvis',
-        'X-Title': 'J.A.R.V.I.S Terminal',
+        'HTTP-Referer': 'https://localhost/jarvis-terminal',
+        'X-OpenRouter-Title': 'J.A.R.V.I.S Terminal',
       },
       body: JSON.stringify({
         model: MODEL,
@@ -378,6 +401,9 @@ async function handleInput() {
     if (!res.ok) {
       const errMsg = data?.error?.message || 'Unknown error';
       print('[ERROR] ' + errMsg, 'err');
+      if (errMsg.includes('401') || errMsg.includes('key')) {
+        print('   → Check your OpenRouter key (may need credits or is invalid)', 'info');
+      }
       br();
       busy = false;
       input.disabled = false;
@@ -400,7 +426,9 @@ async function handleInput() {
 
   } catch (err) {
     thinkEl.remove();
-    print('[ERROR] Cannot reach OpenRouter. Check connection, Sir.', 'err');
+    print('[ERROR] Cannot reach OpenRouter API.', 'err');
+    print('   Detail: ' + err.message, 'info');
+    print('   → Check internet / firewall / key', 'info');
   }
 
   br();
